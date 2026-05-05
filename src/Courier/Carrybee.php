@@ -42,6 +42,21 @@ class Carrybee
 
             $response = $this->fetchCustomer($token, $businessId, $phoneNumber);
 
+            // 404 = customer not found, return empty data (not an auth error)
+            if ($response->status() === 404) {
+                return [
+                    'status'  => true,
+                    'message' => 'No data found for this number.',
+                    'data'    => [
+                        'success'             => 0,
+                        'cancel'              => 0,
+                        'total'               => 0,
+                        'deliveredPercentage' => 0,
+                        'returnPercentage'    => 0,
+                    ],
+                ];
+            }
+
             if ($response->successful()) {
                 return $this->parseResponse($response->json());
             }
@@ -167,7 +182,7 @@ class Carrybee
 
     protected function fetchCustomer(string $token, string $businessId, string $phone)
     {
-        $fullPhone = urlencode('+880' . $phone);
+        $fullPhone = urlencode('+880' . ltrim($phone, '0'));
 
         return Http::withHeaders([
             'Accept'        => 'application/json',
