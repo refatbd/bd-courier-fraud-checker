@@ -55,6 +55,7 @@
 - [🧠 How the Fraud Signal Works](#-how-the-fraud-signal-works)
 - [➕ Adding a New Courier](#-adding-a-new-courier)
 - [❓ FAQ](#-faq)
+- [📝 Changelog](#-changelog)
 - [📄 License](#-license)
 
 ---
@@ -68,7 +69,7 @@
 | 🚨 | **Detailed complaints** | Steadfast returns the full complaint list — name, details, date & image. |
 | 🏷️ | **Fraud labels** | Pathao rating, RedX segment, Carrybee complaint count. |
 | ⚡ | **Smart caching** | Auth tokens/cookies cached for ~50 min — fewer logins, faster checks. |
-| 🛡️ | **Resilient** | Auto-retry on expired sessions, graceful failures, BD phone validation. |
+| 🛡️ | **Resilient** | In-call re-auth on expired sessions, request timeouts, browser-like headers, graceful failures, BD phone validation. |
 | 🧩 | **Extensible** | Drop in a new courier class and wire it up in minutes. |
 
 ---
@@ -156,12 +157,17 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
         'status'  => true,
         'message' => 'Successful.',
         'data'    => [
-            'success'             => 40,
-            'cancel'              => 10,
-            'total'               => 50,
-            'deliveredPercentage' => 80.0,
-            'returnPercentage'    => 20.0,
-            'customerRating'      => 'fraud_customer', // Pathao's own label (new_customer, fraud_customer, …)
+            // Pathao has moved to a rating-based model — most accounts no longer
+            // receive numeric counts (showCount: false). See the note below.
+            'success'             => null,
+            'cancel'              => null,
+            'total'               => null,
+            'deliveredPercentage' => null,
+            'returnPercentage'    => null,
+            'customerRating'      => 'excellent_customer', // Pathao's own label
+            'riskLevel'           => 'low',                // derived: low | medium | high
+            'showCount'           => false,                // did Pathao expose counts?
+            'countsAvailable'     => false,                // numeric data usable?
         ],
     ],
     'redx' => [
@@ -193,6 +199,8 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
 
 > ⚠️ **Always check `status` before reading `data`.** When a courier fails (auth error, no data, etc.) it returns `['status' => false, 'message' => '...']` with **no** `data` key.
 
+> 🟥 **Pathao counts may be `null`.** Pathao migrated to a rating-based model, so most merchant accounts receive **no numeric delivery counts** — `showCount` and `countsAvailable` are `false`, and the count fields are `null` (not `0`, to avoid implying a customer with zero orders). The package **still returns the full numeric breakdown** for any account that *is* entitled to counts (`countsAvailable: true`). **Guard on `countsAvailable` before doing math on Pathao counts.** Steadfast, RedX, and Carrybee continue to return real numeric counts.
+
 ---
 
 ## 🚚 Supported Couriers
@@ -202,9 +210,11 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
 | Courier | Status | Delivery Stats | Fraud Signal |
 |:-------:|:------:|:--------------:|:-------------|
 | **Steadfast** | ✅ | ✅ | ✅ Full complaint list — `frauds[]` (name · details · date · image) |
-| **Pathao** | ✅ | ✅ | 🏷️ Rating label — `customerRating` |
+| **Pathao** | ✅ | ⚠️ Rating-based¹ | 🏷️ Rating + risk — `customerRating`, `riskLevel` |
 | **RedX** | ✅ | ✅ | 🏷️ Segment label — `customerSegment` |
 | **Carrybee** | ✅ | ✅ | 🔢 Complaint count — `fraudCount` |
+
+<sub>¹ Pathao moved to a rating-based model — most accounts get no numeric counts (`countsAvailable: false`). Numeric counts are still returned for entitled accounts.</sub>
 
 </div>
 
@@ -219,11 +229,20 @@ Each courier exposes risk differently. The package normalizes the **delivery sta
 | Courier | Field | Example values | Meaning |
 |---------|-------|----------------|---------|
 | Steadfast | `frauds[]` + `fraudReportCount` | complaint objects | Real merchant-submitted complaints with text, date & image |
-| Pathao | `customerRating` | `new_customer`, `fraud_customer` | Pathao's internal classification of the number |
-| RedX | `customerSegment` | `Normal Customer` | RedX's internal customer tier |
+| Pathao | `customerRating` + `riskLevel` | `excellent_customer` → `low`, `fraud_customer` → `high` | Pathao's internal rating, mapped to a coarse risk level |
+| RedX | `customerSegment` | `Normal Customer`, `High Return Customer` | RedX's internal customer tier |
 | Carrybee | `fraudCount` | `0`, `3`, … | How many complaints Carrybee holds for the number |
 
 > 🔎 **Only Steadfast** returns the full **who / what / when** complaint text. The others give a single label or count — useful as a quick red flag, but without the details.
+
+**Pathao `customerRating` → `riskLevel` mapping:**
+
+| `customerRating` | `riskLevel` |
+|------------------|:-----------:|
+| `excellent_customer`, `good_customer` | `low` |
+| `regular_customer`, `new_customer` | `medium` |
+| `fraud_customer` | `high` |
+| unknown / missing | `null` |
 
 ---
 
@@ -289,9 +308,9 @@ No. Configure only the couriers you use. Unconfigured couriers return <code>stat
 </details>
 
 <details>
-<summary><b>Why are Pathao's delivery counts sometimes 0?</b></summary>
+<summary><b>Why are Pathao's delivery counts <code>null</code>?</b></summary>
 <br/>
-Some Pathao merchant tiers return <code>show_count: false</code> and hide the raw delivery counts. In that case the <code>customerRating</code> label is still accurate and is your reliable signal.
+Pathao migrated the customer-success endpoint to a <b>rating-based model</b>. Most merchant accounts now receive <code>show_count: false</code> with <b>no numeric delivery counts at all</b> — only a <code>customer_rating</code>. The package returns <code>null</code> for the count fields (and <code>countsAvailable: false</code>) rather than fake <code>0</code>s, so you can tell "Pathao gave us no counts" apart from "a customer with zero orders". The <code>customerRating</code> / <code>riskLevel</code> is your reliable Pathao signal. If your account <i>is</i> entitled to numeric counts, the package returns them automatically with <code>countsAvailable: true</code> — no code change needed. This is a Pathao server-side policy and can't be toggled from the API.
 </details>
 
 <details>
@@ -305,6 +324,14 @@ Only the <b>auth tokens / session cookies</b> are cached (~50 minutes) to avoid 
 <br/>
 Any valid Bangladeshi mobile number — with or without the <code>+88</code>/<code>88</code> prefix. The package normalizes and validates it (<code>01[3-9]XXXXXXXX</code>) for you.
 </details>
+
+---
+
+## 📝 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for the full version history.
+
+**Latest — `v1.2.0`:** connection hardening across all four couriers (browser-like headers, request timeouts, in-call re-authentication on stale sessions) and Pathao's rating-based response shape (`riskLevel`, `showCount`, `countsAvailable`; counts are `null` when Pathao doesn't expose them). ⚠️ Guard on `countsAvailable` before doing math on Pathao counts.
 
 ---
 

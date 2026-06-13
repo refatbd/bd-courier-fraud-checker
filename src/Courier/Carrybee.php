@@ -16,6 +16,7 @@ class Carrybee
     protected string $cookieCacheKey = 'carrybee_session_cookies';
     protected string $bizIdCacheKey  = 'carrybee_business_id';
     protected int    $cacheMinutes   = 50;
+    protected int    $timeout        = 20;
 
     public function __construct()
     {
@@ -89,10 +90,11 @@ class Carrybee
     protected function login(): ?string
     {
         // Step 1: GET CSRF token
-        $csrfResponse = Http::withHeaders([
+        $csrfResponse = Http::withHeaders(array_merge($this->browserHeaders(), [
             'Accept'       => 'application/json',
             'Content-Type' => 'application/json',
-        ])->get($this->frontendUrl . '/api/auth/csrf');
+            'Referer'      => $this->frontendUrl . '/login',
+        ]))->timeout($this->timeout)->get($this->frontendUrl . '/api/auth/csrf');
 
         if (!$csrfResponse->successful()) {
             return null;
@@ -111,12 +113,13 @@ class Carrybee
 
         // Step 2: POST credentials
         $loginResponse = Http::withCookies($sessionCookies, 'merchant.carrybee.com')
-            ->withHeaders([
+            ->withHeaders(array_merge($this->browserHeaders(), [
                 'Content-Type'           => 'application/x-www-form-urlencoded',
                 'x-auth-return-redirect' => '1',
                 'Referer'                => $this->frontendUrl . '/login',
                 'Origin'                 => $this->frontendUrl,
-            ])
+            ]))
+            ->timeout($this->timeout)
             ->withOptions(['allow_redirects' => false])
             ->asForm()
             ->post($this->frontendUrl . '/api/auth/callback/login', [
@@ -137,10 +140,12 @@ class Carrybee
 
         // Step 3: GET session → extract Bearer token & business ID
         $sessionResponse = Http::withCookies($sessionCookies, 'merchant.carrybee.com')
-            ->withHeaders([
+            ->withHeaders(array_merge($this->browserHeaders(), [
                 'Accept'       => 'application/json',
                 'Content-Type' => 'application/json',
-            ])
+                'Referer'      => $this->frontendUrl . '/login',
+            ]))
+            ->timeout($this->timeout)
             ->get($this->frontendUrl . '/api/auth/session');
 
         if (!$sessionResponse->successful()) {
@@ -185,13 +190,27 @@ class Carrybee
     {
         $fullPhone = urlencode('+880' . ltrim($phone, '0'));
 
-        return Http::withHeaders([
+        return Http::withHeaders(array_merge($this->browserHeaders(), [
             'Accept'        => 'application/json',
             'Content-Type'  => 'application/json',
             'Authorization' => 'Bearer ' . $token,
             'Origin'        => $this->frontendUrl,
             'Referer'       => $this->frontendUrl . '/',
-        ])->get($this->apiUrl . "/api/v2/businesses/{$businessId}/customers/{$fullPhone}");
+        ]))
+            ->timeout($this->timeout)
+            ->get($this->apiUrl . "/api/v2/businesses/{$businessId}/customers/{$fullPhone}");
+    }
+
+    /**
+     * Default browser-like headers so the request is not blocked or served a
+     * different response by Carrybee's front-end / WAF.
+     */
+    protected function browserHeaders(): array
+    {
+        return [
+            'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'Accept-Language' => 'en-US,en;q=0.9',
+        ];
     }
 
     // -------------------------------------------------------------------------

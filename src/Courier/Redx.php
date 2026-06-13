@@ -12,6 +12,7 @@ class Redx
 
     protected string $cacheKey = 'redx_access_token';
     protected int $cacheMinutes = 50;
+    protected int $timeout = 20;
 
     public function __construct()
     {
@@ -35,7 +36,7 @@ class Redx
             'Accept' => 'application/json, text/plain, */*',
             'Origin' => 'https://redx.com.bd',
             'referer' => 'https://redx.com.bd/',
-        ])->post('https://api.redx.com.bd/v4/auth/login', [
+        ])->timeout($this->timeout)->post('https://api.redx.com.bd/v4/auth/login', [
             'phone' => '88' . $this->validateBDPhoneNumber(config("bdcourierfraudchecker.redx_phone")),
             'password' => config("bdcourierfraudchecker.redx_password"),
         ]);
@@ -75,16 +76,30 @@ class Redx
             ];
         }
 
-        $response = Http::withHeaders([
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-            'Accept' => 'application/json, text/plain, */*',
-            'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer ' . $accessToken,
-            'Origin' => 'https://redx.com.bd',
-            'referer' => 'https://redx.com.bd/',
-        ])->get("https://redx.com.bd/api/redx_se/admin/parcel/customer-success-return-rate?phoneNumber=88{$queryPhone}");
+        // Fetch order data; on a 401 the token is stale, so drop it and
+        // re-authenticate within this same call instead of failing.
+        $maxRetries = 2;
+        $attempt = 0;
+        $response = null;
+        while ($attempt < $maxRetries) {
+            $response = $this->getOrderData($accessToken, $queryPhone);
 
-        if ($response->successful()) {
+            if ($response->successful()) {
+                break;
+            }
+
+            if ($response->status() === 401) {
+                Cache::forget($this->cacheKey);
+                $accessToken = $this->getAccessToken();
+                if (!$accessToken) {
+                    break;
+                }
+            }
+
+            $attempt++;
+        }
+
+        if ($response && $response->successful()) {
             $json = $response->json();
 
             $data = isset($json['data']) ? $json['data'] : [];
@@ -117,8 +132,8 @@ class Redx
                 'message' => "Successful.",
                 'data' => $result,
             ];
-        } elseif ($response->status() === 401) {
-            // Token expired or invalid, clear cache and suggest retry
+        } elseif ($response && $response->status() === 401) {
+            // Re-authentication above did not recover the session.
             Cache::forget($this->cacheKey);
 
             return [
@@ -137,6 +152,21 @@ class Redx
             'message' => $message,
         ];
 
+    }
+
+
+    private function getOrderData($accessToken, $queryPhone)
+    {
+        return Http::withHeaders([
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'Accept' => 'application/json, text/plain, */*',
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer ' . $accessToken,
+            'Origin' => 'https://redx.com.bd',
+            'referer' => 'https://redx.com.bd/',
+        ])
+            ->timeout($this->timeout)
+            ->get("https://redx.com.bd/api/redx_se/admin/parcel/customer-success-return-rate?phoneNumber=88{$queryPhone}");
     }
 
 
