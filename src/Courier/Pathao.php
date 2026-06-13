@@ -90,12 +90,16 @@ class Pathao
                 $deliveredPercentage = $total > 0 ? round(($success / $total) * 100, 2) : 0;
                 $returnPercentage = $total > 0 ? round(($cancel / $total) * 100, 2) : 0;
 
+                // Pathao's own fraud signal (e.g. "fraud_customer", "new_customer")
+                $customerRating = $object['data']['customer_rating'] ?? ($customer['rating'] ?? null);
+
                 $data = [
                     'success' => $success,
                     'cancel' => $cancel,
                     'total' => $total,
                     'deliveredPercentage' => $deliveredPercentage,
                     'returnPercentage' => $returnPercentage,
+                    'customerRating' => $customerRating,
                 ];
 
                 return [

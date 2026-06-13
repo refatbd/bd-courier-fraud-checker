@@ -53,6 +53,7 @@ class Carrybee
                         'total'               => 0,
                         'deliveredPercentage' => 0,
                         'returnPercentage'    => 0,
+                        'fraudCount'          => 0,
                     ],
                 ];
             }
@@ -219,6 +220,9 @@ class Carrybee
 
         $returnPct = $total > 0 ? round(($cancel / $total) * 100, 2) : 0;
 
+        // Carrybee's own complaint counter for this number
+        $fraudCount = (int) ($data['fraud_count'] ?? 0);
+
         return [
             'status'  => true,
             'message' => 'Successful.',
@@ -228,6 +232,7 @@ class Carrybee
                 'total'               => $total,
                 'deliveredPercentage' => $deliveredPct,
                 'returnPercentage'    => $returnPct,
+                'fraudCount'          => $fraudCount,
             ],
         ];
     }

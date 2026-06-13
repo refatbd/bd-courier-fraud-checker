@@ -93,11 +93,15 @@ class Redx
             $total = isset($data['totalParcels']) ? (int)$data['totalParcels'] : 0;
             $cancel = max($total - $delivered, 0);
 
-            // $returnPercentage = (int)($data['returnedPercentage'] ?? 0);
-            // $customerSegment = (string)($data['customerSegment'] ?? "");
-
             $deliveredPercentage = $total > 0 ? round(($delivered / $total) * 100, 2) : 0;
-            $returnPercentage = $total > 0 ? round(($cancel / $total) * 100, 2) : 0;
+
+            // Prefer RedX's own return percentage when provided, otherwise compute it
+            $returnPercentage = isset($data['returnPercentage'])
+                ? (float)$data['returnPercentage']
+                : ($total > 0 ? round(($cancel / $total) * 100, 2) : 0);
+
+            // RedX's own customer rating (e.g. "Normal Customer")
+            $customerSegment = isset($data['customerSegment']) ? (string)$data['customerSegment'] : null;
 
             $result = [
                 'success' => $delivered,
@@ -105,6 +109,7 @@ class Redx
                 'total' => $total,
                 'deliveredPercentage' => $deliveredPercentage,
                 'returnPercentage' => $returnPercentage,
+                'customerSegment' => $customerSegment,
             ];
 
             return [

@@ -2,6 +2,7 @@
 
 namespace Refatbd\BdCourierFraudChecker\Courier;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Refatbd\BdCourierFraudChecker\Traits\Helpers;
@@ -112,12 +113,32 @@ class Steadfast
             $deliveredPercentage = $total > 0 ? round(($success / $total) * 100, 2) : 0;
             $returnPercentage = $total > 0 ? round(($cancel / $total) * 100, 2) : 0;
 
+            // Extract complaints/fraud reports against this number
+            $frauds = [];
+            if (!empty($object['frauds']) && is_array($object['frauds'])) {
+                foreach ($object['frauds'] as $fraud) {
+                    $createdAt = $fraud['created_at'] ?? null;
+
+                    $frauds[] = [
+                        'name' => $fraud['name'] ?? null,
+                        'phone' => $fraud['phone'] ?? null,
+                        'details' => $fraud['details'] ?? null,
+                        'image' => $fraud['image'] ?? null,
+                        'consignment_id' => $fraud['consignment_id'] ?? null,
+                        'created_at' => $createdAt,
+                        'created_at_human' => $createdAt ? Carbon::parse($createdAt)->diffForHumans() : null,
+                    ];
+                }
+            }
+
             $data = [
                 'success' => $success,
                 'cancel' => $cancel,
                 'total' => $total,
                 'deliveredPercentage' => $deliveredPercentage,
                 'returnPercentage' => $returnPercentage,
+                'fraudReportCount' => count($frauds),
+                'frauds' => $frauds,
             ];
 
             return [

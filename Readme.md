@@ -1,42 +1,119 @@
-# BD Courier Fraud Checker
+<!-- ╔══════════════════════════════════════════════════════════════════════╗ -->
+<!-- ║                            HEADER BANNER                               ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════════════╝ -->
 
-A Laravel package to detect fraudulent customers using Bangladeshi courier data (Steadfast, Pathao, Redx).
+<div align="center">
 
-> Maintained by [refatbd](https://github.com/refatbd)
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:007BFF,100:00C6FF&height=200&section=header&text=BD%20Courier%20Fraud%20Checker&fontSize=42&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=Spot%20risky%20customers%20before%20you%20ship&descAlignY=58&descSize=18" width="100%" alt="BD Courier Fraud Checker" />
+
+<!-- Animated typing subtitle -->
+<a href="https://github.com/refatbd">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=3000&pause=800&color=007BFF&center=true&vCenter=true&width=600&lines=Steadfast+%E2%9C%93;Pathao+%E2%9C%93;RedX+%E2%9C%93;Carrybee+%E2%9C%93;One+API.+Four+couriers.+Zero+guesswork." alt="Typing SVG" />
+</a>
+
+<br/>
+
+<!-- Badges -->
+<p>
+  <img src="https://img.shields.io/packagist/v/refatbd/bd-courier-fraud-checker?style=for-the-badge&color=007BFF&logo=packagist&logoColor=white" alt="Packagist Version" />
+  <img src="https://img.shields.io/packagist/dt/refatbd/bd-courier-fraud-checker?style=for-the-badge&color=00C6FF&logo=composer&logoColor=white" alt="Downloads" />
+  <img src="https://img.shields.io/badge/PHP-7.4%20--%208.3-777BB4?style=for-the-badge&logo=php&logoColor=white" alt="PHP" />
+  <img src="https://img.shields.io/badge/Laravel-Ready-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" alt="Laravel" />
+  <img src="https://img.shields.io/packagist/l/refatbd/bd-courier-fraud-checker?style=for-the-badge&color=28a745" alt="License" />
+</p>
+
+<sub>Maintained with ❤️ by <a href="https://github.com/refatbd"><b>refatbd</b></a></sub>
+
+</div>
+
+<br/>
+
+<!-- ╔══════════════════════════════════════════════════════════════════════╗ -->
+<!-- ║                            INTRO                                       ║ -->
+<!-- ╚══════════════════════════════════════════════════════════════════════╝ -->
+
+> A **Laravel package** that checks a Bangladeshi phone number against the data of four major couriers — **Steadfast, Pathao, RedX, and Carrybee** — and tells you, in one call, how risky that customer is before you confirm a Cash-on-Delivery order.
+
+<div align="center">
+
+```
+📞  01XXXXXXXXX  ─────▶  🔎  BdCourierFraudChecker  ─────▶  📊  Success rate · Fraud signals · Complaints
+```
+
+</div>
 
 ---
 
-## Installation
+## 📑 Table of Contents
+
+- [✨ Features](#-features)
+- [📦 Installation](#-installation)
+- [⚙️ Configuration](#️-configuration)
+- [🚀 Usage](#-usage)
+- [🧾 Response Format](#-response-format)
+- [🚚 Supported Couriers](#-supported-couriers)
+- [🧠 How the Fraud Signal Works](#-how-the-fraud-signal-works)
+- [➕ Adding a New Courier](#-adding-a-new-courier)
+- [❓ FAQ](#-faq)
+- [📄 License](#-license)
+
+---
+
+## ✨ Features
+
+|   | Feature | Description |
+|---|---------|-------------|
+| 🔁 | **One call, four couriers** | A single `check()` queries Steadfast, Pathao, RedX & Carrybee. |
+| 📊 | **Delivery success rate** | Delivered / cancelled / total + auto-calculated percentages. |
+| 🚨 | **Detailed complaints** | Steadfast returns the full complaint list — name, details, date & image. |
+| 🏷️ | **Fraud labels** | Pathao rating, RedX segment, Carrybee complaint count. |
+| ⚡ | **Smart caching** | Auth tokens/cookies cached for ~50 min — fewer logins, faster checks. |
+| 🛡️ | **Resilient** | Auto-retry on expired sessions, graceful failures, BD phone validation. |
+| 🧩 | **Extensible** | Drop in a new courier class and wire it up in minutes. |
+
+---
+
+## 📦 Installation
 
 ```bash
 composer require refatbd/bd-courier-fraud-checker
 ```
 
-## Publish Config
+Publish the config file:
 
 ```bash
 php artisan vendor:publish --tag=bdcourierfraudchecker-config
 ```
 
-## Environment Variables
+---
 
-Add these to your `.env` file:
+## ⚙️ Configuration
+
+Add your courier merchant credentials to your `.env` file:
 
 ```env
-# Steadfast
+# 🟦 Steadfast
 STEADFAST_USER=your_email@example.com
 STEADFAST_PASSWORD=your_password
 
-# Pathao
+# 🟥 Pathao
 PATHAO_USER=your_email@example.com
 PATHAO_PASSWORD=your_password
 
-# Redx
+# 🟧 RedX
 REDX_PHONE=01XXXXXXXXX
 REDX_PASSWORD=your_password
+
+# 🟨 Carrybee
+CARRYBEE_PHONE=01XXXXXXXXX
+CARRYBEE_PASSWORD=your_password
 ```
 
-## Usage
+> 💡 You only need to configure the couriers you actually use. A courier with missing credentials simply returns `status => false` instead of breaking the whole check.
+
+---
+
+## 🚀 Usage
 
 ```php
 use Refatbd\BdCourierFraudChecker\Facade\BdCourierFraudChecker;
@@ -44,7 +121,11 @@ use Refatbd\BdCourierFraudChecker\Facade\BdCourierFraudChecker;
 $result = BdCourierFraudChecker::check('01XXXXXXXXX');
 ```
 
-### Response Format
+That's it — `$result` is an array keyed by courier. Loop over it, render it, or feed it into your own risk score.
+
+---
+
+## 🧾 Response Format
 
 ```php
 [
@@ -57,26 +138,103 @@ $result = BdCourierFraudChecker::check('01XXXXXXXXX');
             'total'               => 50,
             'deliveredPercentage' => 90.0,
             'returnPercentage'    => 10.0,
+            'fraudReportCount'    => 1,
+            'frauds'              => [
+                [
+                    'name'             => 'Saiyan Ahammd Santo',
+                    'phone'            => '01893048178',
+                    'details'          => 'পার্সেল রিসিভ করেনা।',
+                    'image'            => null,
+                    'consignment_id'   => 124581452,
+                    'created_at'       => '2025-02-11T14:43:02.000000Z',
+                    'created_at_human' => '1 year ago',
+                ],
+            ],
         ],
     ],
-    'pathao' => [ ... ],
-    'redx'   => [ ... ],
+    'pathao' => [
+        'status'  => true,
+        'message' => 'Successful.',
+        'data'    => [
+            'success'             => 40,
+            'cancel'              => 10,
+            'total'               => 50,
+            'deliveredPercentage' => 80.0,
+            'returnPercentage'    => 20.0,
+            'customerRating'      => 'fraud_customer', // Pathao's own label (new_customer, fraud_customer, …)
+        ],
+    ],
+    'redx' => [
+        'status'  => true,
+        'message' => 'Successful.',
+        'data'    => [
+            'success'             => 30,
+            'cancel'              => 5,
+            'total'               => 35,
+            'deliveredPercentage' => 85.71,
+            'returnPercentage'    => 14.29,
+            'customerSegment'     => 'Normal Customer', // RedX's own rating label
+        ],
+    ],
+    'carrybee' => [
+        'status'  => true,
+        'message' => 'Successful.',
+        'data'    => [
+            'success'             => 18,
+            'cancel'              => 2,
+            'total'               => 20,
+            'deliveredPercentage' => 90.0,
+            'returnPercentage'    => 10.0,
+            'fraudCount'          => 0, // Carrybee's own complaint counter
+        ],
+    ],
 ]
 ```
 
-## Supported Couriers
+> ⚠️ **Always check `status` before reading `data`.** When a courier fails (auth error, no data, etc.) it returns `['status' => false, 'message' => '...']` with **no** `data` key.
 
-| Courier    | Status |
-|------------|--------|
-| Steadfast  | ✅ |
-| Pathao     | ✅ |
-| Redx       | ✅ |
+---
 
-> More couriers can be added easily — see [Adding a New Courier](#adding-a-new-courier).
+## 🚚 Supported Couriers
 
-## Adding a New Courier
+<div align="center">
 
-1. Create a new class in `src/Courier/YourCourier.php`:
+| Courier | Status | Delivery Stats | Fraud Signal |
+|:-------:|:------:|:--------------:|:-------------|
+| **Steadfast** | ✅ | ✅ | ✅ Full complaint list — `frauds[]` (name · details · date · image) |
+| **Pathao** | ✅ | ✅ | 🏷️ Rating label — `customerRating` |
+| **RedX** | ✅ | ✅ | 🏷️ Segment label — `customerSegment` |
+| **Carrybee** | ✅ | ✅ | 🔢 Complaint count — `fraudCount` |
+
+</div>
+
+> More couriers can be added easily — see [Adding a New Courier](#-adding-a-new-courier).
+
+---
+
+## 🧠 How the Fraud Signal Works
+
+Each courier exposes risk differently. The package normalizes the **delivery stats** for all of them, and surfaces each courier's **native fraud signal** on top:
+
+| Courier | Field | Example values | Meaning |
+|---------|-------|----------------|---------|
+| Steadfast | `frauds[]` + `fraudReportCount` | complaint objects | Real merchant-submitted complaints with text, date & image |
+| Pathao | `customerRating` | `new_customer`, `fraud_customer` | Pathao's internal classification of the number |
+| RedX | `customerSegment` | `Normal Customer` | RedX's internal customer tier |
+| Carrybee | `fraudCount` | `0`, `3`, … | How many complaints Carrybee holds for the number |
+
+> 🔎 **Only Steadfast** returns the full **who / what / when** complaint text. The others give a single label or count — useful as a quick red flag, but without the details.
+
+---
+
+## ➕ Adding a New Courier
+
+<details>
+<summary><b>Click to expand the step-by-step guide</b></summary>
+
+<br/>
+
+**1.** Create a new class in `src/Courier/YourCourier.php`:
 
 ```php
 <?php
@@ -107,17 +265,57 @@ class YourCourier
 }
 ```
 
-2. Add credentials to `config/bdcourierfraudchecker.php`:
+**2.** Add credentials to `config/bdcourierfraudchecker.php`:
 
 ```php
 "your_courier_user"     => env("YOUR_COURIER_USER", ""),
 "your_courier_password" => env("YOUR_COURIER_PASSWORD", ""),
 ```
 
-3. Inject it into `CourierCheckerService` and add to the `check()` return array.
+**3.** Inject it into `CourierCheckerService` and add it to the `check()` return array.
 
-4. Bind it in `BdCourierFraudCheckerServiceProvider`.
+**4.** Bind it in `BdCourierFraudCheckerServiceProvider`.
 
-## License
+</details>
 
-MIT
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b>Do I need an account with every courier?</b></summary>
+<br/>
+No. Configure only the couriers you use. Unconfigured couriers return <code>status => false</code> and are skipped — the rest still work.
+</details>
+
+<details>
+<summary><b>Why are Pathao's delivery counts sometimes 0?</b></summary>
+<br/>
+Some Pathao merchant tiers return <code>show_count: false</code> and hide the raw delivery counts. In that case the <code>customerRating</code> label is still accurate and is your reliable signal.
+</details>
+
+<details>
+<summary><b>Is the data cached?</b></summary>
+<br/>
+Only the <b>auth tokens / session cookies</b> are cached (~50 minutes) to avoid logging in on every request. The fraud lookup itself runs fresh on every call, so results are always current.
+</details>
+
+<details>
+<summary><b>What phone formats are accepted?</b></summary>
+<br/>
+Any valid Bangladeshi mobile number — with or without the <code>+88</code>/<code>88</code> prefix. The package normalizes and validates it (<code>01[3-9]XXXXXXXX</code>) for you.
+</details>
+
+---
+
+## 📄 License
+
+Released under the **MIT License** — free to use, modify, and distribute.
+
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:00C6FF,100:007BFF&height=120&section=footer&text=Ship%20smarter.%20Get%20paid.&fontSize=20&fontColor=ffffff&animation=twinkling&fontAlignY=70" width="100%" alt="footer" />
+
+<sub>⭐ If this package saved you from a fraud order, consider starring the repo!</sub>
+
+</div>
