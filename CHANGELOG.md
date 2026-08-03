@@ -5,6 +5,17 @@ All notable changes to `bd-courier-fraud-checker` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-03
+
+Added Paperfly Courier support via Smart Check V2 API.
+
+### Added
+
+- **Paperfly Courier Driver (`Paperfly.php`):** Added integration for Paperfly's merchant Smart Check V2 API (`https://go-app.paperfly.com.bd/merchant/api/react/smart-check/smart-check-v2.php`).
+- **Session Auth & Caching:** Added automated merchant login with 50-minute Bearer token caching (`paperfly_bearer_token`) and automatic in-call token refresh.
+- **Smart Check Response Data:** Normalizes delivered, partial, returned, total orders, delivery rate, return rate, smart check rating label, color, icon, and note.
+- **Configuration:** Added `PAPERFLY_USER` and `PAPERFLY_PASSWORD` configuration keys.
+
 ## [1.2.0] - 2026-06-14
 
 Reliability hardening across all four couriers, plus a Pathao response-shape
@@ -73,5 +84,6 @@ All four integrations were verified live against the real courier APIs.
 - Steadfast, Pathao, RedX, and Carrybee courier checks with delivery stats,
   fraud signals, auth caching (~50 min), and BD phone validation.
 
+[1.3.0]: #130---2026-08-03
 [1.2.0]: #120---2026-06-14
 [1.1.2]: #112---prior-release

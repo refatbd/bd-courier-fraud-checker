@@ -251,6 +251,7 @@ Each courier exposes risk differently. The package normalizes the **delivery sta
 | Pathao | `customerRating` + `riskLevel` | `excellent_customer` → `low`, `fraud_customer` → `high` | Pathao's internal rating, mapped to a coarse risk level |
 | RedX | `customerSegment` | `Normal Customer`, `High Return Customer` | RedX's internal customer tier |
 | Carrybee | `fraudCount` | `0`, `3`, … | How many complaints Carrybee holds for the number |
+| Paperfly | `label`, `color`, `icon`, `note` | `Excellent`, `#4CAF50`, `🟢`, note string | Paperfly Smart Check V2 customer rating label & note |
 
 > 🔎 **Only Steadfast** returns the full **who / what / when** complaint text. The others give a single label or count — useful as a quick red flag, but without the details.
 
