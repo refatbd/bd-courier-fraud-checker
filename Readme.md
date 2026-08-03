@@ -8,7 +8,7 @@
 
 <!-- Animated typing subtitle -->
 <a href="https://github.com/refatbd">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=3000&pause=800&color=007BFF&center=true&vCenter=true&width=600&lines=Steadfast+%E2%9C%93;Pathao+%E2%9C%93;RedX+%E2%9C%93;Carrybee+%E2%9C%93;One+API.+Four+couriers.+Zero+guesswork." alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&duration=3000&pause=800&color=007BFF&center=true&vCenter=true&width=600&lines=Steadfast+%E2%9C%93;Pathao+%E2%9C%93;RedX+%E2%9C%93;Carrybee+%E2%9C%93;Paperfly+%E2%9C%93;One+API.+Five+couriers.+Zero+guesswork." alt="Typing SVG" />
 </a>
 
 <br/>
@@ -32,7 +32,7 @@
 <!-- ║                            INTRO                                       ║ -->
 <!-- ╚══════════════════════════════════════════════════════════════════════╝ -->
 
-> A **Laravel package** that checks a Bangladeshi phone number against the data of four major couriers — **Steadfast, Pathao, RedX, and Carrybee** — and tells you, in one call, how risky that customer is before you confirm a Cash-on-Delivery order.
+> A **Laravel package** that checks a Bangladeshi phone number against the data of five major couriers — **Steadfast, Pathao, RedX, Carrybee, and Paperfly** — and tells you, in one call, how risky that customer is before you confirm a Cash-on-Delivery order.
 
 <div align="center">
 
@@ -64,7 +64,7 @@
 
 |   | Feature | Description |
 |---|---------|-------------|
-| 🔁 | **One call, four couriers** | A single `check()` queries Steadfast, Pathao, RedX & Carrybee. |
+| 🔁 | **One call, five couriers** | A single `check()` queries Steadfast, Pathao, RedX, Carrybee & Paperfly. |
 | 📊 | **Delivery success rate** | Delivered / cancelled / total + auto-calculated percentages. |
 | 🚨 | **Detailed complaints** | Steadfast returns the full complaint list — name, details, date & image. |
 | 🏷️ | **Fraud labels** | Pathao rating, RedX segment, Carrybee complaint count. |
@@ -108,6 +108,10 @@ REDX_PASSWORD=your_password
 # 🟨 Carrybee
 CARRYBEE_PHONE=01XXXXXXXXX
 CARRYBEE_PASSWORD=your_password
+
+# 🟪 Paperfly
+PAPERFLY_USER=your_username
+PAPERFLY_PASSWORD=your_password
 ```
 
 > 💡 You only need to configure the couriers you actually use. A courier with missing credentials simply returns `status => false` instead of breaking the whole check.
@@ -194,6 +198,20 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
             'fraudCount'          => 0, // Carrybee's own complaint counter
         ],
     ],
+    'paperfly' => [
+        'status'        => true,
+        'customer_phone'=> '01711111111',
+        'delivered'     => 15,
+        'partial'       => 0,
+        'returned'      => 2,
+        'total'         => 17,
+        'delivery_rate' => 88.24,
+        'return_rate'   => 11.76,
+        'label'         => 'Excellent',
+        'color'         => '#4CAF50',
+        'icon'          => '🟢',
+        'note'          => 'Outstanding delivery record with minimal returns.',
+    ],
 ]
 ```
 
@@ -213,6 +231,7 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
 | **Pathao** | ✅ | ⚠️ Rating-based¹ | 🏷️ Rating + risk — `customerRating`, `riskLevel` |
 | **RedX** | ✅ | ✅ | 🏷️ Segment label — `customerSegment` |
 | **Carrybee** | ✅ | ✅ | 🔢 Complaint count — `fraudCount` |
+| **Paperfly** | ✅ | ✅ | 🟢 Smart Check V2 — `label`, `color`, `icon`, `note` |
 
 <sub>¹ Pathao moved to a rating-based model — most accounts get no numeric counts (`countsAvailable: false`). Numeric counts are still returned for entitled accounts.</sub>
 

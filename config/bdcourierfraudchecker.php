@@ -13,6 +13,9 @@ return [
     "carrybee_phone"    => env("CARRYBEE_PHONE", ""),
     "carrybee_password" => env("CARRYBEE_PASSWORD", ""),
 
+    "paperfly_user"     => env("PAPERFLY_USER", ""),
+    "paperfly_password" => env("PAPERFLY_PASSWORD", ""),
+
     'message' => [
         "pathao_user"        => 'PATHAO_USER',
         "pathao_password"    => 'PATHAO_PASSWORD',
@@ -22,6 +25,9 @@ return [
         "steedfast_password" => 'STEADFAST_PASSWORD',
         "carrybee_phone"     => 'CARRYBEE_PHONE',
         "carrybee_password"  => 'CARRYBEE_PASSWORD',
+        "paperfly_user"      => 'PAPERFLY_USER',
+        "paperfly_password"  => 'PAPERFLY_PASSWORD',
     ],
 
 ];
+

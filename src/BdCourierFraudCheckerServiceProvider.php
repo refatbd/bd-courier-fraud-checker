@@ -4,6 +4,7 @@ namespace Refatbd\BdCourierFraudChecker;
 
 use Illuminate\Support\ServiceProvider;
 use Refatbd\BdCourierFraudChecker\Courier\Carrybee;
+use Refatbd\BdCourierFraudChecker\Courier\Paperfly;
 use Refatbd\BdCourierFraudChecker\Courier\Pathao;
 use Refatbd\BdCourierFraudChecker\Courier\Redx;
 use Refatbd\BdCourierFraudChecker\Courier\Steadfast;
@@ -37,7 +38,8 @@ class BdCourierFraudCheckerServiceProvider extends ServiceProvider
                 $app->make(Steadfast::class),
                 $app->make(Pathao::class),
                 $app->make(Redx::class),
-                $app->make(Carrybee::class)
+                $app->make(Carrybee::class),
+                $app->make(Paperfly::class)
             );
         });
 
