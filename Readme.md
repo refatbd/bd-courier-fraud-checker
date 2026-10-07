@@ -155,6 +155,12 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
                     'created_at_human' => '1 year ago',
                 ],
             ],
+            'volume_range'        => '10+',
+            'volume_band'         => 'high',
+            'delivery_ratio'      => 90.0,
+            'cancellation_ratio'  => 10.0,
+            'countsAvailable'     => true,
+            'showCount'           => true,
         ],
     ],
     'pathao' => [

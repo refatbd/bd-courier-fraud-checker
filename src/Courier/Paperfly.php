@@ -77,7 +77,7 @@ class Paperfly
      *
      * @return string|null
      */
-    protected function getBearerToken(): ?string
+    public function getBearerToken(): ?string
     {
         $token = Cache::get($this->tokenCacheKey);
         if ($token) {
@@ -92,7 +92,7 @@ class Paperfly
      *
      * @return string|null
      */
-    protected function login(): ?string
+    public function login(): ?string
     {
         $username = config('bdcourierfraudchecker.paperfly_user');
         $password = config('bdcourierfraudchecker.paperfly_password');

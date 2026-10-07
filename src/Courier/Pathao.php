@@ -20,7 +20,7 @@ class Pathao
         $this->checkRequiredConfig(['pathao_user', 'pathao_password']);
     }
 
-    protected function getAccessToken()
+    public function getAccessToken()
     {
         // Try cached token first
         $token = Cache::get($this->cacheKey);
@@ -185,7 +185,7 @@ class Pathao
     }
 
 
-    private function getOrderData($accessToken, $phone)
+    protected function getOrderData($accessToken, $phone)
     {
         return Http::withHeaders(array_merge($this->browserHeaders(), [
             'Content-Type' => 'application/json',
@@ -209,7 +209,7 @@ class Pathao
      * @param string[] $keys
      * @return int|null
      */
-    private function extractCount(array $sources, array $keys): ?int
+    protected function extractCount(array $sources, array $keys): ?int
     {
         foreach ($sources as $source) {
             if (!is_array($source)) {
@@ -233,7 +233,7 @@ class Pathao
      * @param string|null $rating
      * @return string|null  'low' | 'medium' | 'high' | null
      */
-    private function mapRiskLevel(?string $rating): ?string
+    protected function mapRiskLevel(?string $rating): ?string
     {
         if (!$rating) {
             return null;
@@ -260,7 +260,7 @@ class Pathao
      * Default browser-like headers so the request is not blocked or served a
      * different response by Pathao's front-end / WAF.
      */
-    private function browserHeaders(): array
+    protected function browserHeaders(): array
     {
         return [
             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',

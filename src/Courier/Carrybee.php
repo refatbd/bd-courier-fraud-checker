@@ -77,7 +77,7 @@ class Carrybee
     // Step 3: GET  /api/auth/session        -> Bearer token + businessId
     // -------------------------------------------------------------------------
 
-    protected function getBearerToken(): ?string
+    public function getBearerToken(): ?string
     {
         $token = Cache::get($this->tokenCacheKey);
         if ($token) {
@@ -87,7 +87,7 @@ class Carrybee
         return $this->login();
     }
 
-    protected function login(): ?string
+    public function login(): ?string
     {
         // Step 1: GET CSRF token
         $csrfResponse = Http::withHeaders(array_merge($this->browserHeaders(), [

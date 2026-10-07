@@ -5,6 +5,35 @@ All notable changes to `bd-courier-fraud-checker` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-10-07
+
+Modernized Steadfast Courier integration to support their 2026 response schema, added graceful upstream rate-limit handling, and opened method visibility across all courier drivers to support custom adapters, credential testing, and clean subclassing.
+
+### Added
+
+- **Steadfast 2026 Response Schema Support (`Steadfast.php`):**
+  - Added support for Steadfast's modern delivery intelligence response keys: `delivery_ratio`, `cancellation_ratio`, `volume_range` (e.g. `"10+"`, `"1-5"`), and `volume_band`.
+  - Added proportional order estimation logic from `volume_range` and percentage metrics when explicit raw counts are hidden by Steadfast.
+  - Added `volume_range`, `volume_band`, `delivery_ratio`, `cancellation_ratio`, `countsAvailable`, and `showCount` to the response `data` payload.
+- **Steadfast Rate-Limit Handling (HTTP 429):**
+  - Added explicit handling for Steadfast's per-account search quota limits. Returning a structured `429` error response with upstream error detail instead of falling back to a generic connection failure.
+- **Public Authentication & Connection Verification Helpers:**
+  - Made `login()` in `Steadfast`, `Carrybee`, and `Paperfly` public (`public function login()`) to allow direct credential validation and connection testing from service providers or admin consoles.
+  - Made token retrieval helpers (`getAccessToken()` in `Pathao` and `Redx`, `getBearerToken()` in `Carrybee` and `Paperfly`) public to permit programmatic token inspection and health checks.
+
+### Changed
+
+- **Extensibility & Method Visibility Hardening (All Couriers):**
+  - Converted internal helper methods across all courier classes (`getOrderData`, `formatResult`, `browserHeaders`, `extractCsrfToken`, `cookiesToArray`, `isJsonResponse`, `extractCount`, `mapRiskLevel`) from `private` to `protected`.
+  - Enables clean object-oriented subclassing and enterprise adapter extension without encountering PHP fatal visibility errors.
+
+### Fixed
+
+- **Fatal Error `Call to private method Refatbd\BdCourierFraudChecker\Courier\Steadfast::login()`:**
+  - Resolved fatal scope collision when custom adapters (such as `SteadfastAdapter`) or external callers invoked `login()` on `Steadfast`.
+- **Steadfast Misleading Zeroes / 0% Success Rate:**
+  - Fixed issue where Steadfast queries returned `0` delivered, `0` cancelled, and `0%` success rate due to Steadfast deprecating `total_delivered` and `total_cancelled` in their live API. The driver now gracefully parses both legacy counts and modern ratio metrics.
+
 ## [1.3.0] - 2026-08-03
 
 Added Paperfly Courier support via Smart Check V2 API.

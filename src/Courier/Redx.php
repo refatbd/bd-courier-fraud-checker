@@ -21,7 +21,7 @@ class Redx
         $this->validateBDPhoneNumber(config("bdcourierfraudchecker.redx_phone"));
     }
 
-    protected function getAccessToken()
+    public function getAccessToken()
     {
         // Try cached token first
         $token = Cache::get($this->cacheKey);
@@ -155,7 +155,7 @@ class Redx
     }
 
 
-    private function getOrderData($accessToken, $queryPhone)
+    protected function getOrderData($accessToken, $queryPhone)
     {
         return Http::withHeaders([
             'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
