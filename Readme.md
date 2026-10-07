@@ -93,7 +93,11 @@ php artisan vendor:publish --tag=bdcourierfraudchecker-config
 Add your courier merchant credentials to your `.env` file:
 
 ```env
-# 🟦 Steadfast
+# 🟦 Steadfast (Recommended: Official REST API)
+STEADFAST_API_KEY=your_api_key
+STEADFAST_SECRET_KEY=your_secret_key
+
+# 🟦 Steadfast (Legacy: Web portal session login fallback)
 STEADFAST_USER=your_email@example.com
 STEADFAST_PASSWORD=your_password
 
@@ -135,7 +139,8 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
 ```php
 [
     'steadfast' => [
-        'status' => true,
+        'status'  => true,
+        'driver'  => 'api', // 'api' (Recommended) or 'legacy'
         'message' => 'Successful.',
         'data' => [
             'success'             => 45,

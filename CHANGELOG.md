@@ -5,6 +5,26 @@ All notable changes to `bd-courier-fraud-checker` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-10-07
+
+Introduced official Steadfast REST API integration as the **Recommended** driver while preserving the web portal session scraping flow as the fully functional **Legacy** fallback driver.
+
+### Added
+
+- **Recommended Driver: Official Steadfast REST API (`GET /fraud_check/score/{phone}`):**
+  - High-performance, direct integration using merchant `STEADFAST_API_KEY` and `STEADFAST_SECRET_KEY` headers.
+  - Eliminates web scraping, CSRF extraction, cookie jar storage, and authentication timeouts.
+  - Returns delivery ratios, cancellation ratios, volume band, volume range, and merchant fraud categories in ~200ms.
+- **Dual-Driver Architecture (`Steadfast.php`):**
+  - Added `steadfastApi(string $phoneNumber)` for direct invocation of the Recommended REST API driver.
+  - Added `steadfastLegacy(string $phoneNumber)` for direct invocation of the Legacy web session driver.
+  - Added `hasApiCredentials()` helper to detect configured driver mode.
+  - Main entry method `steadfast($phoneNumber)` automatically prioritizes the Recommended REST API if keys are present, gracefully falling back to Legacy mode.
+  - Returns `driver: 'api'` or `driver: 'legacy'` in response payload for transparency.
+- **Configuration Keys (`config/bdcourierfraudchecker.php`):**
+  - Added `STEADFAST_API_KEY` and `STEADFAST_SECRET_KEY` (Recommended).
+  - Maintained `STEADFAST_USER` and `STEADFAST_PASSWORD` (Legacy).
+
 ## [1.4.0] - 2026-10-07
 
 Modernized Steadfast Courier integration to support their 2026 response schema, added graceful upstream rate-limit handling, and opened method visibility across all courier drivers to support custom adapters, credential testing, and clean subclassing.

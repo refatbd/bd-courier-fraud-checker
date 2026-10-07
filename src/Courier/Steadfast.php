@@ -5,11 +5,17 @@ namespace Refatbd\BdCourierFraudChecker\Courier;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Refatbd\BdCourierFraudChecker\Exception\BdCourierFraudCheckerException;
 use Refatbd\BdCourierFraudChecker\Traits\Helpers;
 
 class Steadfast
 {
     use Helpers;
+
+    /**
+     * @var string Official Steadfast REST API base URL.
+     */
+    protected string $apiBaseUrl = 'https://portal.packzy.com/api/v1';
 
     protected string $cacheKey = 'steedfast_cookie';
     protected int $cacheMinutes = 50;
@@ -17,12 +23,116 @@ class Steadfast
 
     public function __construct()
     {
-        // Check for required environment variables
-        $this->checkRequiredConfig(['steedfast_user', 'steedfast_password']);
+        $hasApiKeys = !empty(config('bdcourierfraudchecker.steadfast_api_key')) && !empty(config('bdcourierfraudchecker.steadfast_secret_key'));
+        $hasLegacyAuth = !empty(config('bdcourierfraudchecker.steedfast_user')) && !empty(config('bdcourierfraudchecker.steedfast_password'));
+
+        if (!$hasApiKeys && !$hasLegacyAuth) {
+            throw new BdCourierFraudCheckerException(
+                "Steadfast credentials not configured. Please set either STEADFAST_API_KEY & STEADFAST_SECRET_KEY (Recommended) or STEADFAST_USER & STEADFAST_PASSWORD (Legacy)."
+            );
+        }
     }
 
+    /**
+     * Primary entry point: check fraud and delivery statistics for a phone number.
+     * Automatically prioritizes the Recommended official REST API (STEADFAST_API_KEY & STEADFAST_SECRET_KEY)
+     * if configured, falling back to the Legacy web session driver (STEADFAST_USER & STEADFAST_PASSWORD).
+     *
+     * @param string $phoneNumber
+     * @return array
+     */
+    public function steadfast($phoneNumber): array
+    {
+        $phoneNumber = $this->validateBDPhoneNumber($phoneNumber);
 
-    public function steadfast($phoneNumber)
+        if ($this->hasApiCredentials()) {
+            return $this->steadfastApi($phoneNumber);
+        }
+
+        return $this->steadfastLegacy($phoneNumber);
+    }
+
+    /**
+     * Check if official Steadfast API keys are configured (Recommended mode).
+     *
+     * @return bool
+     */
+    public function hasApiCredentials(): bool
+    {
+        return !empty(config('bdcourierfraudchecker.steadfast_api_key')) &&
+               !empty(config('bdcourierfraudchecker.steadfast_secret_key'));
+    }
+
+    /**
+     * Recommended: Query Steadfast using the official REST API (GET /fraud_check/score/{phone}).
+     * Fast, reliable, no scraping/cookies needed.
+     * Requires STEADFAST_API_KEY and STEADFAST_SECRET_KEY.
+     *
+     * @param string $phoneNumber
+     * @return array
+     */
+    public function steadfastApi(string $phoneNumber): array
+    {
+        $phoneNumber = $this->validateBDPhoneNumber($phoneNumber);
+
+        $apiKey = config('bdcourierfraudchecker.steadfast_api_key');
+        $secretKey = config('bdcourierfraudchecker.steadfast_secret_key');
+
+        $response = Http::withHeaders([
+            'Api-Key'      => $apiKey,
+            'Secret-Key'   => $secretKey,
+            'Content-Type' => 'application/json',
+            'Accept'       => 'application/json',
+        ])
+        ->timeout($this->timeout)
+        ->get("{$this->apiBaseUrl}/fraud_check/score/{$phoneNumber}");
+
+        if ($response->status() === 429) {
+            $object = $response->json();
+            $err = is_array($object) ? ($object['error'] ?? $object['message'] ?? null) : null;
+            return [
+                'status'  => false,
+                'driver'  => 'api',
+                'message' => $err ?: 'Steadfast rate limit exceeded. You have reached your maximum allowed searches.',
+                'code'    => 429,
+            ];
+        }
+
+        if ($response->status() === 401) {
+            return [
+                'status'  => false,
+                'driver'  => 'api',
+                'message' => 'Steadfast API authentication failed. Please verify your Api-Key and Secret-Key.',
+                'code'    => 401,
+            ];
+        }
+
+        if ($response->successful()) {
+            $object = $response->json();
+            if (is_array($object)) {
+                $result = $this->formatResult($object);
+                $result['driver'] = 'api';
+                return $result;
+            }
+        }
+
+        return [
+            'status'  => false,
+            'driver'  => 'api',
+            'message' => 'Failed to fetch data from Steadfast API.',
+            'code'    => $response->status(),
+        ];
+    }
+
+    /**
+     * Legacy: Query Steadfast using web portal session cookie scraping.
+     * Retained for complete backwards compatibility.
+     * Uses STEADFAST_USER and STEADFAST_PASSWORD.
+     *
+     * @param string $phoneNumber
+     * @return array
+     */
+    public function steadfastLegacy(string $phoneNumber): array
     {
         $phoneNumber = $this->validateBDPhoneNumber($phoneNumber);
 
@@ -38,7 +148,8 @@ class Steadfast
 
                 if (!$loginCookiesArray) {
                     return [
-                        'status' => false,
+                        'status'  => false,
+                        'driver'  => 'legacy',
                         'message' => "Authentication failed",
                     ];
                 }
@@ -51,9 +162,10 @@ class Steadfast
                 $object = $authResponse->json();
                 $err = is_array($object) ? ($object['error'] ?? null) : null;
                 return [
-                    'status' => false,
+                    'status'  => false,
+                    'driver'  => 'legacy',
                     'message' => $err ?: 'Steadfast rate limit exceeded. You have reached your maximum allowed searches.',
-                    'code' => 429,
+                    'code'    => 429,
                 ];
             }
 
@@ -63,7 +175,9 @@ class Steadfast
                 $object = $authResponse->json();
 
                 if (is_array($object) && !empty($object)) {
-                    return $this->formatResult($object);
+                    $result = $this->formatResult($object);
+                    $result['driver'] = 'legacy';
+                    return $result;
                 }
             }
 
@@ -74,14 +188,14 @@ class Steadfast
         }
 
         return [
-            'status' => false,
+            'status'  => false,
+            'driver'  => 'legacy',
             'message' => "Something went wrong. Try again",
         ];
     }
 
-
     /**
-     * Authenticate against Steadfast and return the session cookies.
+     * Authenticate against Steadfast web portal and return the session cookies (Legacy).
      * Caches the cookies on success. Returns null on failure.
      *
      * @return array|null
@@ -90,6 +204,10 @@ class Steadfast
     {
         $email = config("bdcourierfraudchecker.steedfast_user");
         $password = config("bdcourierfraudchecker.steedfast_password");
+
+        if (empty($email) || empty($password)) {
+            return null;
+        }
 
         // First fetch the login page (for the CSRF token + initial cookies)
         $response = Http::withHeaders($this->browserHeaders())
@@ -111,15 +229,15 @@ class Steadfast
         // authenticated session cookie that Steadfast sets on the 302 response.
         $loginRequest = Http::withHeaders(array_merge($this->browserHeaders(), [
                 'Referer' => 'https://steadfast.com.bd/login',
-                'Origin' => 'https://steadfast.com.bd',
+                'Origin'  => 'https://steadfast.com.bd',
             ]))
             ->withCookies($cookiesArray, 'steadfast.com.bd')
             ->asForm()
             ->timeout($this->timeout)
             ->withoutRedirecting()
             ->post('https://steadfast.com.bd/login', [
-                '_token' => $token,
-                'email' => $email,
+                '_token'   => $token,
+                'email'    => $email,
                 'password' => $password,
             ]);
 
@@ -146,21 +264,19 @@ class Steadfast
         return $loginCookiesArray;
     }
 
-
     protected function getOrderData($loginCookiesArray, $phoneNumber)
     {
         // Ask explicitly for JSON. With these headers a stale session returns a
         // 401/redirect we can detect, rather than a 200 HTML login page.
         return Http::withHeaders(array_merge($this->browserHeaders(), [
-                'Accept' => 'application/json, text/plain, */*',
+                'Accept'           => 'application/json, text/plain, */*',
                 'X-Requested-With' => 'XMLHttpRequest',
-                'Referer' => 'https://steadfast.com.bd/user/frauds/check',
+                'Referer'          => 'https://steadfast.com.bd/user/frauds/check',
             ]))
             ->withCookies($loginCookiesArray, 'steadfast.com.bd')
             ->timeout($this->timeout)
             ->get('https://steadfast.com.bd/user/frauds/check/' . $phoneNumber);
     }
-
 
     protected function formatResult(array $object): array
     {
@@ -219,60 +335,58 @@ class Steadfast
                 $createdAt = $fraud['created_at'] ?? null;
 
                 $frauds[] = [
-                    'name' => $fraud['name'] ?? null,
-                    'phone' => $fraud['phone'] ?? null,
-                    'details' => $fraud['details'] ?? null,
-                    'image' => $fraud['image'] ?? null,
-                    'consignment_id' => $fraud['consignment_id'] ?? null,
-                    'created_at' => $createdAt,
+                    'name'             => $fraud['name'] ?? null,
+                    'phone'            => $fraud['phone'] ?? null,
+                    'details'          => $fraud['details'] ?? null,
+                    'image'            => $fraud['image'] ?? null,
+                    'consignment_id'   => $fraud['consignment_id'] ?? null,
+                    'created_at'       => $createdAt,
                     'created_at_human' => $createdAt ? Carbon::parse($createdAt)->diffForHumans() : null,
                 ];
             }
         }
 
-        $fraudReportCount = isset($object['fraud_reports']) ? (int) $object['fraud_reports'] : count($frauds);
+        $fraudReportCount = isset($object['total_reports'])
+            ? (int) $object['total_reports']
+            : (isset($object['fraud_reports']) ? (int) $object['fraud_reports'] : count($frauds));
+
+        $fraudCategories = $object['fraud_categories'] ?? [];
 
         $data = [
-            'success' => $success,
-            'cancel' => $cancel,
-            'total' => $total,
+            'success'             => $success,
+            'cancel'              => $cancel,
+            'total'               => $total,
             'deliveredPercentage' => $deliveredPercentage,
-            'returnPercentage' => $returnPercentage,
-            'fraudReportCount' => $fraudReportCount,
-            'frauds' => $frauds,
-            'volume_range' => $volumeRange,
-            'volume_band' => $volumeBand,
-            'delivery_ratio' => $deliveryRatio,
-            'cancellation_ratio' => $cancellationRatio,
-            'countsAvailable' => $hasExplicitCounts || $total > 0,
-            'showCount' => true,
+            'returnPercentage'    => $returnPercentage,
+            'fraudReportCount'    => $fraudReportCount,
+            'frauds'              => $frauds,
+            'fraud_categories'    => $fraudCategories,
+            'volume_range'        => $volumeRange,
+            'volume_band'         => $volumeBand,
+            'delivery_ratio'      => $deliveryRatio,
+            'cancellation_ratio'  => $cancellationRatio,
+            'countsAvailable'     => $hasExplicitCounts || $total > 0,
+            'showCount'           => true,
         ];
 
         return [
-            'status' => true,
+            'status'  => true,
             'message' => "Successful.",
-            'data' => $data,
+            'data'    => $data,
         ];
     }
 
-
-    /**
-     * Default browser-like headers so the request is not blocked or served a
-     * different response by Steadfast's front-end / WAF.
-     */
     protected function browserHeaders(): array
     {
         return [
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
-            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'User-Agent'      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'Accept'          => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language' => 'en-US,en;q=0.9',
         ];
     }
 
-
     protected function extractCsrfToken(string $html): ?string
     {
-        // Tolerant of attribute ordering / meta-tag fallback.
         $patterns = [
             '/name="_token"\s+value="([^"]+)"/',
             '/value="([^"]+)"\s+name="_token"/',
@@ -288,7 +402,6 @@ class Steadfast
         return null;
     }
 
-
     protected function cookiesToArray($cookieJar): array
     {
         $array = [];
@@ -299,7 +412,6 @@ class Steadfast
         return $array;
     }
 
-
     protected function isJsonResponse($response): bool
     {
         $contentType = (string) $response->header('Content-Type');
@@ -307,9 +419,6 @@ class Steadfast
             return true;
         }
 
-        // Fallback: an HTML body decodes to null, valid JSON to an array.
         return is_array($response->json());
     }
-
-
 }

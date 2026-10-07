@@ -12,6 +12,8 @@ class SteadfastResponseTest
         echo "Running Steadfast tests...\n";
 
         self::testMethodVisibilities();
+        self::testDriverMethodsExist();
+        self::testOfficialApiFormatResult();
         self::testLegacyFormatResult();
         self::testModern2026FormatResult();
         self::testZeroHistoryFormatResult();
@@ -46,13 +48,74 @@ class SteadfastResponseTest
         echo "  [x] Method visibilities verified (login is public, helpers are protected)\n";
     }
 
+    protected static function testDriverMethodsExist(): void
+    {
+        $ref = new ReflectionClass(Steadfast::class);
+
+        assert($ref->hasMethod('steadfast'), 'Steadfast::steadfast() must exist');
+        assert($ref->hasMethod('steadfastApi'), 'Steadfast::steadfastApi() must exist (Recommended)');
+        assert($ref->hasMethod('steadfastLegacy'), 'Steadfast::steadfastLegacy() must exist (Legacy)');
+        assert($ref->hasMethod('hasApiCredentials'), 'Steadfast::hasApiCredentials() must exist');
+
+        assert($ref->getMethod('steadfast')->isPublic());
+        assert($ref->getMethod('steadfastApi')->isPublic());
+        assert($ref->getMethod('steadfastLegacy')->isPublic());
+        assert($ref->getMethod('hasApiCredentials')->isPublic());
+
+        echo "  [x] Dual-driver methods verified (Recommended & Legacy)\n";
+    }
+
+    protected static function testOfficialApiFormatResult(): void
+    {
+        $ref = new ReflectionClass(Steadfast::class);
+        $method = $ref->getMethod('formatResult');
+        $method->setAccessible(true);
+
+        $instance = $ref->newInstanceWithoutConstructor();
+
+        // Exact response payload returned by GET /fraud_check/score/{phone}
+        $officialApiPayload = [
+            'status' => 200,
+            'phone' => '01739676846',
+            'score' => null,
+            'level' => null,
+            'reasons' => [],
+            'scoring_disabled' => true,
+            'doubtful_reports' => false,
+            'total_reports' => 2,
+            'delivery_ratio' => 92,
+            'cancellation_ratio' => 7,
+            'volume_band' => 'high',
+            'volume_range' => '25+',
+            'fraud_categories' => [
+                'refused' => 1,
+                'no_response' => 1,
+            ],
+            'return_ratio' => 7,
+        ];
+
+        $result = $method->invoke($instance, $officialApiPayload);
+
+        assert($result['status'] === true);
+        assert($result['data']['total'] === 25, 'Expected 25 parsed from 25+');
+        assert($result['data']['success'] === 23, 'Expected 23 successes (92% of 25)');
+        assert($result['data']['cancel'] === 2, 'Expected 2 cancels (7% of 25)');
+        assert($result['data']['deliveredPercentage'] == 92.0);
+        assert($result['data']['returnPercentage'] == 7.0);
+        assert($result['data']['fraudReportCount'] === 2);
+        assert($result['data']['volume_range'] === '25+');
+        assert($result['data']['volume_band'] === 'high');
+        assert(isset($result['data']['fraud_categories']['refused']));
+
+        echo "  [x] Official REST API payload parsing verified\n";
+    }
+
     protected static function testLegacyFormatResult(): void
     {
         $ref = new ReflectionClass(Steadfast::class);
         $method = $ref->getMethod('formatResult');
         $method->setAccessible(true);
 
-        // Instantiate Steadfast without running constructor requiring config
         $instance = $ref->newInstanceWithoutConstructor();
 
         $legacyPayload = [
@@ -112,7 +175,7 @@ class SteadfastResponseTest
         assert($result['data']['fraudReportCount'] === 1);
         assert(count($result['data']['frauds']) === 1);
 
-        echo "  [x] Modern 2026 schema parsing verified\n";
+        echo "  [x] Modern 2026 web dashboard schema parsing verified\n";
     }
 
     protected static function testZeroHistoryFormatResult(): void
