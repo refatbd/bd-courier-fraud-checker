@@ -143,9 +143,9 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
         'driver'  => 'api', // 'api' (Recommended) or 'legacy'
         'message' => 'Successful.',
         'data' => [
-            'success'             => 45,
-            'cancel'              => 5,
-            'total'               => 50,
+            'success'             => null, // restricted counts stay unknown
+            'cancel'              => null,
+            'total'               => null,
             'deliveredPercentage' => 90.0,
             'returnPercentage'    => 10.0,
             'fraudReportCount'    => 1,
@@ -164,8 +164,8 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
             'volume_band'         => 'high',
             'delivery_ratio'      => 90.0,
             'cancellation_ratio'  => 10.0,
-            'countsAvailable'     => true,
-            'showCount'           => true,
+            'countsAvailable'     => false,
+            'showCount'           => false,
         ],
     ],
     'pathao' => [
@@ -190,7 +190,7 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
         'message' => 'Successful.',
         'data'    => [
             'success'             => 30,
-            'cancel'              => 5,
+            'cancel'              => null,
             'total'               => 35,
             'deliveredPercentage' => 85.71,
             'returnPercentage'    => 14.29,
@@ -377,3 +377,9 @@ Released under the **MIT License** — free to use, modify, and distribute.
 <sub>⭐ If this package saved you from a fraud order, consider starring the repo!</sub>
 
 </div>
+
+
+## Steadfast status observations (v1.6.0)
+
+See [release notes](RELEASE_NOTES.md) for metadata, unknown quotas, null counts and migration guidance. A public ping does not validate merchant credentials. No documented standalone fraud-budget endpoint is assumed.
+

@@ -97,9 +97,9 @@ class SteadfastResponseTest
         $result = $method->invoke($instance, $officialApiPayload);
 
         assert($result['status'] === true);
-        assert($result['data']['total'] === 25, 'Expected 25 parsed from 25+');
-        assert($result['data']['success'] === 23, 'Expected 23 successes (92% of 25)');
-        assert($result['data']['cancel'] === 2, 'Expected 2 cancels (7% of 25)');
+        assert($result['data']['total'] === null, 'Hidden counts must remain unknown');
+        assert($result['data']['success'] === null, 'Hidden counts must remain unknown');
+        assert($result['data']['cancel'] === null, 'Hidden counts must remain unknown');
         assert($result['data']['deliveredPercentage'] == 92.0);
         assert($result['data']['returnPercentage'] == 7.0);
         assert($result['data']['fraudReportCount'] === 2);
@@ -165,9 +165,9 @@ class SteadfastResponseTest
         $result = $method->invoke($instance, $modernPayload);
 
         assert($result['status'] === true);
-        assert($result['data']['total'] === 10, 'Expected total 10 parsed from 10+');
-        assert($result['data']['success'] === 8, 'Expected 8 successes (80% of 10)');
-        assert($result['data']['cancel'] === 2, 'Expected 2 cancels (20% of 10)');
+        assert($result['data']['total'] === null, 'Hidden counts must remain unknown');
+        assert($result['data']['success'] === null, 'Hidden counts must remain unknown');
+        assert($result['data']['cancel'] === null, 'Hidden counts must remain unknown');
         assert($result['data']['deliveredPercentage'] == 80.0);
         assert($result['data']['returnPercentage'] == 20.0);
         assert($result['data']['volume_range'] === '10+');
@@ -199,11 +199,11 @@ class SteadfastResponseTest
         $result = $method->invoke($instance, $emptyPayload);
 
         assert($result['status'] === true);
-        assert($result['data']['total'] === 0);
-        assert($result['data']['success'] === 0);
-        assert($result['data']['cancel'] === 0);
-        assert($result['data']['deliveredPercentage'] == 0.0);
-        assert($result['data']['returnPercentage'] == 0.0);
+        assert($result['data']['total'] === null);
+        assert($result['data']['success'] === null);
+        assert($result['data']['cancel'] === null);
+        assert($result['data']['deliveredPercentage'] === null);
+        assert($result['data']['returnPercentage'] === null);
         assert($result['data']['fraudReportCount'] === 0);
 
         echo "  [x] Zero history schema parsing verified\n";

@@ -3,6 +3,7 @@
 namespace Refatbd\BdCourierFraudChecker\Courier;
 
 use Carbon\Carbon;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Refatbd\BdCourierFraudChecker\Exception\BdCourierFraudCheckerException;
@@ -78,49 +79,75 @@ class Steadfast
         $apiKey = config('bdcourierfraudchecker.steadfast_api_key');
         $secretKey = config('bdcourierfraudchecker.steadfast_secret_key');
 
-        $response = Http::withHeaders([
-            'Api-Key'      => $apiKey,
-            'Secret-Key'   => $secretKey,
-            'Content-Type' => 'application/json',
-            'Accept'       => 'application/json',
-        ])
-        ->timeout($this->timeout)
-        ->get("{$this->apiBaseUrl}/fraud_check/score/{$phoneNumber}");
-
-        if ($response->status() === 429) {
-            $object = $response->json();
-            $err = is_array($object) ? ($object['error'] ?? $object['message'] ?? null) : null;
+        try {
+            $response = Http::withHeaders([
+                'Api-Key' => $apiKey,
+                'Secret-Key' => $secretKey,
+                'Accept' => 'application/json',
+            ])->timeout($this->timeout)
+                ->get("{$this->apiBaseUrl}/fraud_check/score/{$phoneNumber}");
+        } catch (ConnectionException $exception) {
+            // Transport exceptions may contain the recipient URL. Never return it.
             return [
-                'status'  => false,
-                'driver'  => 'api',
-                'message' => $err ?: 'Steadfast rate limit exceeded. You have reached your maximum allowed searches.',
-                'code'    => 429,
+                'status' => false, 'driver' => 'api',
+                'message' => 'Unable to connect to Steadfast API.',
+                'meta' => $this->responseMetadata(null, 'network_error'),
             ];
         }
 
-        if ($response->status() === 401) {
-            return [
-                'status'  => false,
-                'driver'  => 'api',
-                'message' => 'Steadfast API authentication failed. Please verify your Api-Key and Secret-Key.',
-                'code'    => 401,
-            ];
-        }
+        $code = $response->status();
+        $state = $code === 401 ? 'auth_failed' : ($code === 403 ? 'forbidden' : ($code === 429 ? 'throttled' : 'unavailable'));
+        $message = $code === 401 ? 'Steadfast API authentication failed. Verify your Api-Key and Secret-Key.'
+            : ($code === 429 ? 'Steadfast temporarily limited this request. The response does not establish a daily quota.'
+                : 'Failed to fetch data from Steadfast API.');
 
         if ($response->successful()) {
             $object = $response->json();
-            if (is_array($object)) {
+            // A JSON error or arbitrary 200 payload must not prove valid credentials.
+            if (is_array($object) && (!isset($object['status']) || (int) $object['status'] === 200)
+                && count(array_intersect(array_keys($object), ['delivered_count', 'cancelled_count', 'total_delivered', 'total_cancelled', 'volume_band', 'volume_range', 'delivery_ratio'])) > 0) {
                 $result = $this->formatResult($object);
                 $result['driver'] = 'api';
+                $result['meta'] = $this->responseMetadata($response, 'connected');
                 return $result;
             }
+            $state = 'invalid_response';
         }
 
         return [
-            'status'  => false,
-            'driver'  => 'api',
-            'message' => 'Failed to fetch data from Steadfast API.',
-            'code'    => $response->status(),
+            'status' => false, 'driver' => 'api', 'message' => $message, 'code' => $code,
+            'meta' => $this->responseMetadata($response, $state),
+        ];
+    }
+
+    /** Sanitized observations from this request, never an account-wide daily budget. */
+    protected function responseMetadata($response, string $state): array
+    {
+        $retryAfter = $response ? trim((string) $response->header('Retry-After')) : '';
+        $retrySeconds = null;
+        if ($retryAfter !== '') {
+            if (ctype_digit($retryAfter)) {
+                $retrySeconds = (int) $retryAfter;
+            } elseif (($timestamp = strtotime($retryAfter)) !== false) {
+                $retrySeconds = max(0, $timestamp - time());
+            }
+        }
+        $numericHeader = static function (string $name) use ($response): ?int {
+            $value = $response ? trim((string) $response->header($name)) : '';
+            return $value !== '' && ctype_digit($value) ? (int) $value : null;
+        };
+
+        return [
+            'http_status' => $response ? $response->status() : null,
+            'state' => $state,
+            'retry_after_seconds' => $retrySeconds,
+            // Header scope/reset window is provider-defined, not necessarily fraud checks.
+            'rate_limit' => [
+                'limit' => $numericHeader('X-RateLimit-Limit'),
+                'remaining' => $numericHeader('X-RateLimit-Remaining'),
+            ],
+            // No documented endpoint currently reports the fraud-check budget remaining.
+            'quota' => ['remaining' => null, 'limit' => null, 'reset_at' => null],
         ];
     }
 
@@ -288,44 +315,19 @@ class Steadfast
         $volumeRange = $object['volume_range'] ?? null;
         $volumeBand = $object['volume_band'] ?? null;
 
-        $hasExplicitCounts = ($deliveredCount !== null || $cancelledCount !== null);
-
+        // Both counts must be explicit: a missing count is not a zero.
+        $hasExplicitCounts = is_numeric($deliveredCount) && is_numeric($cancelledCount);
         if ($hasExplicitCounts) {
-            $success = (int) ($deliveredCount ?? 0);
-            $cancel = (int) ($cancelledCount ?? 0);
+            $success = max(0, (int) $deliveredCount);
+            $cancel = max(0, (int) $cancelledCount);
             $total = $success + $cancel;
-            $deliveredPercentage = $total > 0 ? round(($success / $total) * 100, 2) : ($deliveryRatio ?? 0.0);
-            $returnPercentage = $total > 0 ? round(($cancel / $total) * 100, 2) : ($cancellationRatio ?? 0.0);
+            $deliveredPercentage = $deliveryRatio ?? ($total > 0 ? round($success / $total * 100, 2) : 0.0);
+            $returnPercentage = $cancellationRatio ?? ($total > 0 ? round($cancel / $total * 100, 2) : 0.0);
         } else {
-            // New Steadfast schema: extract base order volume from volume_range (e.g. "10+" -> 10, "1-5" -> 5)
-            $parsedVolume = 0;
-            if ($volumeRange !== null) {
-                if (preg_match('/(\d+)\s*\+/', (string) $volumeRange, $m)) {
-                    $parsedVolume = (int) $m[1];
-                } elseif (preg_match('/(\d+)\s*-\s*(\d+)/', (string) $volumeRange, $m)) {
-                    $parsedVolume = (int) $m[2];
-                } elseif (is_numeric($volumeRange)) {
-                    $parsedVolume = (int) $volumeRange;
-                }
-            } elseif ($deliveryRatio !== null || ($volumeBand && $volumeBand !== 'none')) {
-                $parsedVolume = 1;
-            }
-
-            if ($deliveryRatio !== null || $cancellationRatio !== null || $parsedVolume > 0) {
-                $deliveredPercentage = $deliveryRatio !== null ? round($deliveryRatio, 2) : 0.0;
-                $returnPercentage = $cancellationRatio !== null ? round($cancellationRatio, 2) : ($deliveryRatio !== null ? max(0.0, round(100.0 - $deliveryRatio, 2)) : 0.0);
-
-                $total = $parsedVolume;
-                $success = (int) round(($total * $deliveredPercentage) / 100);
-                $cancel = (int) round(($total * $returnPercentage) / 100);
-            } else {
-                // No order history with Steadfast
-                $success = 0;
-                $cancel = 0;
-                $total = 0;
-                $deliveredPercentage = 0.0;
-                $returnPercentage = 0.0;
-            }
+            // A range such as 25+ cannot establish exact parcel counts.
+            $success = $cancel = $total = null;
+            $deliveredPercentage = $deliveryRatio;
+            $returnPercentage = $cancellationRatio;
         }
 
         // Extract complaints/fraud reports against this number
@@ -365,8 +367,8 @@ class Steadfast
             'volume_band'         => $volumeBand,
             'delivery_ratio'      => $deliveryRatio,
             'cancellation_ratio'  => $cancellationRatio,
-            'countsAvailable'     => $hasExplicitCounts || $total > 0,
-            'showCount'           => true,
+            'countsAvailable'     => $hasExplicitCounts,
+            'showCount'           => $hasExplicitCounts,
         ];
 
         return [
