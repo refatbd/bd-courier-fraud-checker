@@ -190,7 +190,7 @@ That's it — `$result` is an array keyed by courier. Loop over it, render it, o
         'message' => 'Successful.',
         'data'    => [
             'success'             => 30,
-            'cancel'              => null,
+            'cancel'              => 5,
             'total'               => 35,
             'deliveredPercentage' => 85.71,
             'returnPercentage'    => 14.29,
