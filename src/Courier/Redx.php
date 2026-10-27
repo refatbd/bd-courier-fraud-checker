@@ -3,6 +3,7 @@
 namespace Refatbd\BdCourierFraudChecker\Courier;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Http\Client\ConnectionException;
 use Refatbd\BdCourierFraudChecker\Traits\Helpers;
 use Illuminate\Support\Facades\Cache;
 
@@ -13,6 +14,7 @@ class Redx
     protected string $cacheKey = 'redx_access_token';
     protected int $cacheMinutes = 50;
     protected int $timeout = 20;
+    protected ?int $lastAuthStatus = null;
 
     public function __construct()
     {
@@ -41,6 +43,7 @@ class Redx
             'password' => config("bdcourierfraudchecker.redx_password"),
         ]);
 
+        $this->lastAuthStatus = $response->status();
         if (!$response->successful()) {
             return null;
         }
@@ -56,102 +59,64 @@ class Redx
     public function redx(string $queryPhone)
     {
         $queryPhone = $this->validateBDPhoneNumber($queryPhone);
-
-        $maxRetries = 2;
-        $attempt = 0;
-        $accessToken = null;
-        while ($attempt < $maxRetries) {
-            $accessToken = $this->getAccessToken();
-
-            if ($accessToken) {
-                break;
-            }
-            $attempt++;
+        try {
+            return $this->lookup($queryPhone);
+        } catch (ConnectionException $exception) {
+            return $this->failure(null, 'network_error', 'Unable to connect to RedX.');
         }
+    }
 
+    protected function lookup(string $queryPhone)
+    {
+        $queryPhone = $this->validateBDPhoneNumber($queryPhone);
+
+        $accessToken = $this->getAccessToken();
         if (!$accessToken) {
-            return [
-                'status' => false,
-                'message' => "Login failed or unable to get access token",
-            ];
+            return $this->failure($this->lastAuthStatus, 'auth_failed', 'Unable to authenticate with RedX.');
         }
 
-        // Fetch order data; on a 401 the token is stale, so drop it and
-        // re-authenticate within this same call instead of failing.
-        $maxRetries = 2;
-        $attempt = 0;
-        $response = null;
-        while ($attempt < $maxRetries) {
+        // Only an expired token earns one re-authentication; no generic request loops.
+        $response = $this->getOrderData($accessToken, $queryPhone);
+        if ($response->status() === 401) {
+            Cache::forget($this->cacheKey);
+            $accessToken = $this->getAccessToken();
+            if (!$accessToken) return $this->failure($this->lastAuthStatus, 'auth_failed', 'Unable to authenticate with RedX.');
             $response = $this->getOrderData($accessToken, $queryPhone);
-
-            if ($response->successful()) {
-                break;
-            }
-
-            if ($response->status() === 401) {
-                Cache::forget($this->cacheKey);
-                $accessToken = $this->getAccessToken();
-                if (!$accessToken) {
-                    break;
-                }
-            }
-
-            $attempt++;
         }
 
-        if ($response && $response->successful()) {
-            $json = $response->json();
+        $json = $response->json();
+        $status = $response->status();
+        if (!RedxResult::accepts($status, $json)) {
+            $state = in_array($status, [401, 403], true) ? 'auth_failed' : ($status === 429 ? 'throttled' : 'invalid_response');
+            return $this->failure($status, $state, 'RedX did not return a valid customer lookup result.');
+        }
+        $data = $json['data'];
+        $total = (int) $data['totalParcels'];
+        $delivered = (int) $data['deliveredParcels'];
+        $cancel = $total - $delivered;
 
-            $data = isset($json['data']) ? $json['data'] : [];
-
-            $delivered = isset($data['deliveredParcels']) ? (int)$data['deliveredParcels'] : 0;
-            $total = isset($data['totalParcels']) ? (int)$data['totalParcels'] : 0;
-            $cancel = max($total - $delivered, 0);
-
-            $deliveredPercentage = $total > 0 ? round(($delivered / $total) * 100, 2) : 0;
-
-            // Prefer RedX's own return percentage when provided, otherwise compute it
-            $returnPercentage = isset($data['returnPercentage'])
-                ? (float)$data['returnPercentage']
-                : ($total > 0 ? round(($cancel / $total) * 100, 2) : 0);
-
-            // RedX's own customer rating (e.g. "Normal Customer")
-            $customerSegment = isset($data['customerSegment']) ? (string)$data['customerSegment'] : null;
-
-            $result = [
+        return [
+            'status' => true,
+            'message' => 'Successful.',
+            'meta' => ['http_status' => $status, 'state' => 'connected', 'success_envelope_compatibility' => $status === 400],
+            'data' => [
                 'success' => $delivered,
                 'cancel' => $cancel,
                 'total' => $total,
-                'deliveredPercentage' => $deliveredPercentage,
-                'returnPercentage' => $returnPercentage,
-                'customerSegment' => $customerSegment,
-            ];
-
-            return [
-                'status' => true,
-                'message' => "Successful.",
-                'data' => $result,
-            ];
-        } elseif ($response && $response->status() === 401) {
-            // Re-authentication above did not recover the session.
-            Cache::forget($this->cacheKey);
-
-            return [
-                'status' => false,
-                'message' => "Access token expired or invalid. Please retry.",
-            ];
-        }
-
-        // Get the full response body as JSON
-        $error = ($response) ? $response->json() : [];
-
-        // Optionally get a specific message
-        $message = $error['message'] ?? 'Unknown error occurred.';
-        return [
-            'status' => false,
-            'message' => $message,
+                'deliveredPercentage' => $total > 0 ? round($delivered / $total * 100, 2) : null,
+                'returnPercentage' => $total > 0 ? round($cancel / $total * 100, 2) : null,
+                'providerReturnPercentage' => is_numeric($data['returnPercentage'] ?? null) ? (float) $data['returnPercentage'] : null,
+                'customerSegment' => is_string($data['customerSegment'] ?? null) ? $data['customerSegment'] : null,
+                'countsAvailable' => true,
+                'showCount' => true,
+            ],
         ];
+    }
 
+    protected function failure(?int $status, string $state, string $message): array
+    {
+        return ['status' => false, 'code' => $status, 'message' => $message,
+            'meta' => ['http_status' => $status, 'state' => $state]];
     }
 
 

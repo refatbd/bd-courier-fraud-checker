@@ -78,3 +78,4 @@ $exact = $format->invoke($ref->newInstanceWithoutConstructor(), ['delivered_coun
 assert($exact['data']['total'] === 99);
 assert($exact['data']['deliveredPercentage'] === 92.0);
 echo "HTTP metadata, retry policy, redaction and count integrity tests passed.\n";
+require __DIR__.'/RedxResponseTest.php';

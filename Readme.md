@@ -383,3 +383,7 @@ Released under the **MIT License** — free to use, modify, and distribute.
 
 See [release notes](RELEASE_NOTES.md) for metadata, unknown quotas, null counts and migration guidance. A public ping does not validate merchant credentials. No documented standalone fraud-budget endpoint is assumed.
 
+
+## RedX response compatibility (v1.6.1)
+
+See [v1.6.1 release notes](RELEASE_NOTES_1.6.1.md) for the narrowly validated HTTP 400 success-envelope exception, normalized rates, and null empty-history rates.
