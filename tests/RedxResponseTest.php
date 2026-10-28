@@ -10,7 +10,8 @@ $body = ['code'=>200, 'isError'=>false, 'message'=>'', 'data'=>[
     'totalParcels'=>10, 'deliveredParcels'=>6, 'returnPercentage'=>4, 'customerSegment'=>'Normal Customer',
 ]];
 $cases = [
-    [200,$body,true,1], [400,$body,true,1],
+    [200,$body,true,1],
+    [400,$body,false,1],
     [400,array_replace($body,['isError'=>true]),false,1],
     [400,array_diff_key($body,['isError'=>true]),false,1],
     [400,array_replace($body,['code'=>400]),false,1],
@@ -20,7 +21,7 @@ $cases = [
 ];
 foreach ([[-1,0],[1,2],[1.5,1],['invalid',0],[null,0]] as [$total,$delivered]) {
     $bad=$body; $bad['data']['totalParcels']=$total; $bad['data']['deliveredParcels']=$delivered;
-    $cases[]=[400,$bad,false,1];
+    $cases[]=[200,$bad,false,1];
 }
 foreach ($cases as [$status,$payload,$expected,$requests]) {
     $container->instance(Factory::class,new Factory);
@@ -39,13 +40,15 @@ foreach ($cases as [$status,$payload,$expected,$requests]) {
         assert($result['data']['deliveredPercentage']===60.0);
         assert($result['data']['returnPercentage']===40.0);
         assert($result['data']['providerReturnPercentage']===4.0);
-        assert($result['meta']['success_envelope_compatibility']===($status===400));
     } else {
         assert(trim($result['message'])!=='');
         assert($result['code']===$status);
+        if ($status === 400 || $status === 500) {
+            assert($result['meta']['state'] === 'unavailable');
+        }
     }
     assert(strpos(json_encode($result),'fake-token')===false);
-    Http::assertSentCount($requests);
+    assert(count(Http::recorded()) === $requests);
 }
 $container->instance(Factory::class,new Factory);
 Facade::clearResolvedInstance(Factory::class);
@@ -55,4 +58,4 @@ $ref=new ReflectionClass(Refatbd\BdCourierFraudChecker\Courier\Paperfly::class);
 $method=$ref->getMethod('formatResult'); $method->setAccessible(true);
 $empty=$method->invoke($ref->newInstanceWithoutConstructor(),['total'=>0,'smart_check'=>['delivery_rate'=>0]]);
 assert($empty['delivery_rate']===null && $empty['return_rate']===null);
-echo "RedX success-envelope, rejection, request-count, redaction and Paperfly empty-rate checks passed.\n";
+echo "RedX rejection of 400 anomaly, genuine 200 acceptance, request-count, redaction and Paperfly empty-rate checks passed.\n";

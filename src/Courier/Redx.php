@@ -87,8 +87,11 @@ class Redx
         $json = $response->json();
         $status = $response->status();
         if (!RedxResult::accepts($status, $json)) {
-            $state = in_array($status, [401, 403], true) ? 'auth_failed' : ($status === 429 ? 'throttled' : 'invalid_response');
-            return $this->failure($status, $state, 'RedX did not return a valid customer lookup result.');
+            $state = in_array($status, [401, 403], true) ? 'auth_failed' : ($status === 429 ? 'throttled' : ($status === 400 || $status >= 500 ? 'unavailable' : 'invalid_response'));
+            $msg = ($status === 400 || $status === 503)
+                ? 'RedX customer lookup service is currently unavailable or offline.'
+                : 'RedX did not return a valid customer lookup result.';
+            return $this->failure($status, $state, $msg);
         }
         $data = $json['data'];
         $total = (int) $data['totalParcels'];
@@ -98,7 +101,7 @@ class Redx
         return [
             'status' => true,
             'message' => 'Successful.',
-            'meta' => ['http_status' => $status, 'state' => 'connected', 'success_envelope_compatibility' => $status === 400],
+            'meta' => ['http_status' => $status, 'state' => 'connected'],
             'data' => [
                 'success' => $delivered,
                 'cancel' => $cancel,

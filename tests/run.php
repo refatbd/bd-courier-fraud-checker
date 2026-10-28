@@ -58,7 +58,7 @@ foreach ($cases as [$code, $body, $headers, $state]) {
         assert($result['meta']['retry_after_seconds'] >= 59);
         assert($result['meta']['retry_after_seconds'] <= 120);
     }
-    Http::assertSentCount(1); // Auth and throttling never trigger automatic retries.
+    assert(count(Http::recorded()) === 1); // Auth and throttling never trigger automatic retries.
 }
 $container->instance(Factory::class, new Factory);
 Facade::clearResolvedInstance(Factory::class);
